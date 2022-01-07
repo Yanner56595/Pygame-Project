@@ -1,0 +1,4 @@
+Images.
+gnomes: https://opengameart.org/content/gnomes
+tiles: https://opengameart.org/content/supertux-world-map-tiles
+evil creatures: https://0x72.itch.io/dungeontileset-ii
