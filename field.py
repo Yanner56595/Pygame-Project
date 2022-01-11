@@ -3,11 +3,19 @@
 
 import sys
 import pygame
+import pygame_gui
 import os
 import random
 from csv import reader
 from enum import IntEnum
 from math import exp
+from copy import deepcopy
+
+
+class DotDict(dict):
+    __getattr__ = dict.get
+    __setattr__ = dict.__setitem__
+    __delattr__ = dict.__delitem__
 
 
 class ResType(IntEnum):
@@ -36,6 +44,7 @@ class Textures(IntEnum):
     GROUND_LIGHTED = 8
     AIM = 9
     WOUND = 10
+    BLOOD = 11
 
 
 class TileType(IntEnum):
@@ -50,14 +59,44 @@ class ImageType(IntEnum):
     LIGHTED = 1
 
 
+class AIStepType(IntEnum):
+    MOVE = 0
+    ATTACK = 1
+
+
+class StepData:
+    def __init__(self, type, orig, dest, etc):
+        self.type = type
+        self.orig = orig
+        self.dest = dest
+        self.etc = etc
+
+
 FPS = 60
-DELTATIME = 0
 TILE_DEFENCE = {
     TileType.FIELD: 0,
     TileType.CASTLE: 3,
     TileType.SPIKE: -3,
 }
-    
+TILE_COEFF = {
+    TileType.FIELD: 1,
+    TileType.CASTLE: 3,
+    TileType.SPIKE: 0.2,
+}
+UNIT_SIG = {
+    UnitType.ELF: 10,
+    UnitType.MAG: 15,
+    UnitType.KNIGHT: 12,
+    UnitType.GOBLIN: 12,
+    UnitType.SCULL: 7,
+    UnitType.WIZARD: 15,
+    UnitType.DEMON: 90,
+}
+
+
+def val_to_coeff(val, max_val, min_val, max_coeff, min_coeff):
+    return val / (max_val - min_val) * (max_coeff - min_coeff) + min_coeff
+
 
 def move_towards(cur, tar, delta):
     if tar < cur and cur - delta > tar:
@@ -90,60 +129,48 @@ def change_color(img, dr, dg, db, da):
     new_img.fill((dr, dg, db, da), special_flags=pygame.BLEND_RGBA_MULT)
     return new_img
 
+# def __init__(self, tex_type, tex_holder, columns, frame_time, tbl, x, y,
+#              turn, tile_speed, attack_range, hp, attack_dmg, armor, board, canvas):
 
-def create_elf(board, unit_coords, tex_holder, turn):
-    unit = Unit(tex_holder.get(Textures.ELF),
-                tex_holder.get(Textures.AIM),
-                tex_holder.get(Textures.WOUND),
-                4, 100, *board.get_cell_coords(unit_coords), turn, board)
+def create_elf(board, unit_coords, tex_holder, canvas, turn):
+    unit = Unit(UnitType.ELF, Textures.ELF, tex_holder,
+                4, 0.1, 0, *board.get_cell_coords(unit_coords), turn, 2, 2, 15, 5, 1, board, canvas)
     return unit
 
 
-def create_knight(board, unit_coords, tex_holder, turn):
-    unit = Unit(tex_holder.get(Textures.KNIGHT),
-                tex_holder.get(Textures.AIM),
-                tex_holder.get(Textures.WOUND),
-                4, 100, *board.get_cell_coords(unit_coords), turn, board)
+def create_knight(board, unit_coords, tex_holder, canvas, turn):
+    unit = Unit(UnitType.KNIGHT, Textures.KNIGHT, tex_holder,
+                4, 0.1, 0, *board.get_cell_coords(unit_coords), turn, 1, 1, 20, 10, 7, board, canvas)
     return unit
 
 
-def create_mag(board, unit_coords, tex_holder, turn):
-    unit = Unit(tex_holder.get(Textures.MAG),
-                tex_holder.get(Textures.AIM),
-                tex_holder.get(Textures.WOUND),
-                5, 100, *board.get_cell_coords(unit_coords), turn, board)
+def create_mag(board, unit_coords, tex_holder, canvas, turn):
+    unit = Unit(UnitType.MAG, Textures.MAG, tex_holder,
+                5, 0.1, 0, *board.get_cell_coords(unit_coords), turn, 2, 2, 5, 10, 0, board, canvas)
     return unit
 
 
-def create_goblin(board, unit_coords, tex_holder, turn):
-    unit = Unit(tex_holder.get(Textures.GOBLIN),
-                tex_holder.get(Textures.AIM),
-                tex_holder.get(Textures.WOUND),
-                4, 100, *board.get_cell_coords(unit_coords), turn, board)
+def create_goblin(board, unit_coords, tex_holder, canvas, turn):
+    unit = Unit(UnitType.GOBLIN, Textures.GOBLIN, tex_holder,
+                4, 0.1, 0, *board.get_cell_coords(unit_coords), turn, 1, 1, 20, 10, 7, board, canvas)
     return unit
 
 
-def create_scull(board, unit_coords, tex_holder, turn):
-    unit = Unit(tex_holder.get(Textures.SCULL),
-                tex_holder.get(Textures.AIM),
-                tex_holder.get(Textures.WOUND),
-                3, 100, *board.get_cell_coords(unit_coords), turn, board)
+def create_scull(board, unit_coords, tex_holder, canvas, turn):
+    unit = Unit(UnitType.SCULL, Textures.SCULL, tex_holder,
+                3, 0.1, 0, *board.get_cell_coords(unit_coords), turn, 3, 1, 7, 3, 0, board, canvas)
     return unit
 
 
-def create_wizard(board, unit_coords, tex_holder, turn):
-    unit = Unit(tex_holder.get(Textures.WIZARD),
-                tex_holder.get(Textures.AIM),
-                tex_holder.get(Textures.WOUND),
-                4, 100, *board.get_cell_coords(unit_coords), turn, board)
+def create_wizard(board, unit_coords, tex_holder, canvas, turn):
+    unit = Unit(UnitType.WIZARD, Textures.WIZARD, tex_holder,
+                4, 0.1, 0, *board.get_cell_coords(unit_coords), turn, 2, 2, 5, 10, 0, board, canvas)
     return unit
 
 
-def create_demon(board, unit_coords, tex_holder, turn):
-    unit = Unit(tex_holder.get(Textures.DEMON),
-                tex_holder.get(Textures.AIM),
-                tex_holder.get(Textures.WOUND),
-                4, 100, *board.get_cell_coords(unit_coords), turn, board)
+def create_demon(board, unit_coords, tex_holder, canvas, turn):
+    unit = Unit(UnitType.DEMON, Textures.DEMON, tex_holder,
+                4, 0.1, 0, *board.get_cell_coords(unit_coords), turn, 1, 1, 50, 10, 5, board, canvas)
     return unit
 
 
@@ -161,43 +188,48 @@ def load_board(name, tex_holder):
                 unit_coords = tuple(map(int, unit_data[1:]))
                 unit = None
                 if int(unit_data[0]) == UnitType.ELF:
-                    unit = create_elf(board, unit_coords, tex_holder, 1)
+                    unit = create_elf(board, unit_coords, tex_holder, board.canvas, 1)
                 elif int(unit_data[0]) == UnitType.MAG:
-                    unit = create_mag(board, unit_coords, tex_holder, 1)
+                    unit = create_mag(board, unit_coords, tex_holder, board.canvas, 1)
                 elif int(unit_data[0]) == UnitType.KNIGHT:
-                    unit = create_knight(board, unit_coords, tex_holder, 1)
+                    unit = create_knight(board, unit_coords, tex_holder, board.canvas, 1)
                 elif int(unit_data[0]) == UnitType.GOBLIN:
-                    unit = create_goblin(board, unit_coords, tex_holder, 2)
+                    unit = create_goblin(board, unit_coords, tex_holder, board.canvas, 2)
                 elif int(unit_data[0]) == UnitType.SCULL:
-                    unit = create_scull(board, unit_coords, tex_holder, 2)
+                    unit = create_scull(board, unit_coords, tex_holder, board.canvas, 2)
                 elif int(unit_data[0]) == UnitType.WIZARD:
-                    unit = create_wizard(board, unit_coords, tex_holder, 2)
+                    unit = create_wizard(board, unit_coords, tex_holder, board.canvas, 2)
                 elif int(unit_data[0]) == UnitType.DEMON:
-                    unit = create_demon(board, unit_coords, tex_holder, 2)
+                    unit = create_demon(board, unit_coords, tex_holder, board.canvas, 2)
                 board.cells[unit_coords[1]][unit_coords[0]].unit = unit
         return board
 
 
-class Particle(pygame.sprite.Sprite):
-    def __init__(self, pos, dx_min, dx_max, dy_min, dx_max,
-                 grav_min, grav_max, dtime_min, dtime_max, dsize,
-                 tileset):
-        super().__init__(self)
-        
-        self.image = random.choice(tileset).copy()
-        self.rect = self.image.get_rect()
-        self.velocity = [random.randint(dx_min, dx_max),
-                         random.randint(dy_min, dy_max)]
-        self.dsize = dsize
-        self.dtime = random.randint(dtime_min, dtime_max)
-        self.rect.x, self.rect.y = pos
-        self.gravity = random.randint(grav_max, grav_min)
+def create_particle(pos, tileset, dx_min, dx_max, dy_min, dy_max,
+                    time_min, time_max, count, *group):
+    for i in range(count):
+        Particle(pos, tileset, dx_min, dx_max, dy_min, dy_max,
+                 time_min, time_max, *group)
 
-    def update(self):
-        self.velocity[1] += self.gravity
-        self.rect.x += self.velocity[0]
-        self.rect.y += self.velocity[1]
-        if not self.rect.colliderect(screen_rect):
+
+class Particle(pygame.sprite.Sprite):
+    def __init__(self, pos, tileset, dx_min, dx_max, dy_min, dy_max,
+                 time_min, time_max, *group):
+        super().__init__(*group)
+        self.image = random.choice(tileset.tiles)
+        self.rect = self.image.get_rect()
+        self.velocity = [random.uniform(dx_min, dx_max),
+                         random.uniform(dy_min, dy_max)]
+        self.time = random.uniform(time_min, time_max)
+        self.rect.x, self.rect.y = pos
+        self.coords = list(pos)
+    def update(self, time_delta):
+        self.coords[0] += self.velocity[0]
+        self.coords[1] += self.velocity[1]
+        self.rect.x = round(self.coords[0])
+        self.rect.y = round(self.coords[1])
+        self.time -= time_delta
+        if self.time < 0:
             self.kill()
 
 
@@ -222,7 +254,6 @@ class Tileset:
     def __init__(self, sheet, columns):
         self.tiles = []
         self.cut_sheet(sheet, columns)
-
     def cut_sheet(self, sheet, columns):
         rect = pygame.Rect((0, 0),
                            (sheet.get_width() // columns,
@@ -234,21 +265,27 @@ class Tileset:
 
 
 class AnimatedSprite(pygame.sprite.Sprite, Tileset):
-    def __init__(self, sheet, columns, frame_time, x, y, *group):
+    def __init__(self, sheet, columns, frame_time, time_before_loop, x, y, *group):
         pygame.sprite.Sprite.__init__(self, *group)
         Tileset.__init__(self, sheet, columns)
         self.frame_time = frame_time
         self.cur_time = frame_time
         self.cur_frame = 0
+        self.time_before_loop = time_before_loop
+        self.cur_time_before_loop = time_before_loop
         self.image = self.tiles[self.cur_frame]
         self.rect = self.image.get_rect().move(x, y)
         
-    def update(self):
-        self.cur_time -= DELTATIME
+    def update(self, time_delta):
+        self.cur_time -= time_delta
+        self.cur_time_before_loop -= time_delta
         if self.cur_time < 0:
-            self.cur_frame = (self.cur_frame + 1) % len(self.tiles)
-            self.cur_time = self.frame_time
-            self.image = self.tiles[self.cur_frame]
+            if self.cur_time_before_loop < 0:
+                self.cur_frame = (self.cur_frame + 1) % len(self.tiles)
+                self.cur_time = self.frame_time
+                self.image = self.tiles[self.cur_frame]
+                if self.cur_frame == 0:
+                    self.cur_frame_before_loop = self.time_before_loop
 
 
 class Tile:
@@ -259,40 +296,57 @@ class Tile:
 
 
 class Unit(AnimatedSprite):
-    def __init__(self, sheet, aim_img, wound_img, columns, frame_time, x, y, turn, board):
-        AnimatedSprite.__init__(self, sheet, columns, frame_time, x, y, board.units)
-        
-        self.wound_img = wound_img
+    def __init__(self, unit_type, tex_type, tex_holder, columns, frame_time, tbl, x, y,
+                 turn, tile_speed, attack_range, hp, attack_dmg, armor,  board, canvas):
+        AnimatedSprite.__init__(self, tex_holder.get(tex_type), columns, frame_time, tbl, x, y, board.units)
+        self.unit_type = unit_type
+
+        self.wound_img = tex_holder.get(Textures.WOUND)
         self.wound_rect = self.wound_img.get_rect()
-        
-        self.aim_img = aim_img
+
+        self.aim_img = tex_holder.get(Textures.AIM)
         self.aim_rect = self.aim_img.get_rect()
-        
+
+        blood_img = tex_holder.get(Textures.BLOOD)
+        self.blood_set = Tileset(blood_img, 3)
+
         self.board = board
-        
-        self.wound_time = 1500
+
+        self.wound_time = 1.5
         self.wound_cur = self.wound_time
         self.rec_dmg = 0
-        
+
         self.tar_coords = (x, y)
 
-        self.tile_speed = 2
-        self.moving_speed = 0.25
+        self.tile_speed = tile_speed
+        self.moving_speed = 250
         self.turn = turn
         self.moved = False
-        self.attack_range = 1
+        self.attack_range = attack_range
         self.has_attacked = False
         self.under_attack = False
 
-        self.hp = 20
-        self.attack_dmg = 7
-        self.armor = 2
+        self.health_capacity = hp
+        self.current_health = self.health_capacity
+        hp_bar_rect = pygame.Rect((0, 0), (65, 10))
+        self.hp_bar = pygame_gui.elements.UIWorldSpaceHealthBar(relative_rect=hp_bar_rect,
+                                                                sprite_to_monitor=self,
+                                                                manager=canvas)
+        self.attack_dmg = attack_dmg
+        self.armor = armor
 
         self.enemies_in_range = []
+        self.walkable_tiles = []
 
-    def get_walkable_tiles(self):
+    def light_walkable_tiles(self):
         if self.moved:
             return
+        self.get_walkable_tiles()
+        for tile in self.walkable_tiles:
+            self.board.cells[tile[1]][tile[0]].walkable = True
+
+    def get_walkable_tiles(self):
+        self.walkable_tiles.clear()
         unit_pos = self.board.get_cell(self.rect.center)
         for row in range(self.board.height):
             for column in range(self.board.width):
@@ -300,7 +354,7 @@ class Unit(AnimatedSprite):
                 dis_y = abs(unit_pos[1] - row)
                 if dis_x + dis_y <= self.tile_speed:
                     if self.board.cells[row][column].tile_type != TileType.ROCK and not self.board.cells[row][column].unit:
-                        self.board.cells[row][column].walkable = True
+                        self.walkable_tiles.append((column, row))
 
     def get_enemies(self):
         self.enemies_in_range.clear()
@@ -324,31 +378,38 @@ class Unit(AnimatedSprite):
         dmg = self.attack_dmg - tar.armor - TILE_DEFENCE[tar_tile.tile_type]
 
         if dmg >= 1:
-            tar.hp -= dmg
+            tar.current_health -= dmg
             tar.rec_dmg = dmg
 
-        if tar.hp <= 0:
+        if tar.current_health <= 0:
             tar.kill()
+            tar.hp_bar.hide()
             tar_tile.unit = None
+            create_particle(tar.rect.center, self.blood_set, -2, 2, -2, 2, 1, 2, 20, self.board.particles)
 
-    def update(self):
-        self.cur_time -= DELTATIME
+    def update(self, time_delta):
+        self.cur_time -= time_delta
+        self.cur_time_before_loop -= time_delta
         if self.cur_time < 0:
-            self.cur_frame = (self.cur_frame + 1) % len(self.tiles)
-            self.cur_time = self.frame_time
-            self.image = self.tiles[self.cur_frame]
+            if self.cur_time_before_loop < 0:
+                self.cur_frame = (self.cur_frame + 1) % len(self.tiles)
+                self.cur_time = self.frame_time
+                self.image = self.tiles[self.cur_frame]
+                if self.cur_frame == 0:
+                    self.cur_time_before_loop = self.time_before_loop
 
         if self.rec_dmg:
-            self.wound_cur -= DELTATIME
+            self.wound_cur -= time_delta
             if self.wound_cur < 0:
                 self.wound_cur = self.wound_time
                 self.rec_dmg = 0
+                create_particle(self.rect.center, self.blood_set, -2, 2, -2, 2, 1, 2, 10, self.board.particles)
 
         if self.rect.x != self.tar_coords[0]:
-            self.rect.x = round(move_towards(self.rect.x, self.tar_coords[0], self.moving_speed * DELTATIME))
+            self.rect.x = round(move_towards(self.rect.x, self.tar_coords[0], self.moving_speed * time_delta))
 
         elif self.rect.y != self.tar_coords[1]:
-            self.rect.y = round(move_towards(self.rect.y, self.tar_coords[1], self.moving_speed * DELTATIME))
+            self.rect.y = round(move_towards(self.rect.y, self.tar_coords[1], self.moving_speed * time_delta))
 
     def draw(self, target):
         target.blit(self.image, self.rect)
@@ -357,10 +418,95 @@ class Unit(AnimatedSprite):
             target.blit(self.wound_img, self.wound_rect)
             wound_lvl_f = pygame.font.Font(None, 32)
             wound_lvl_t = wound_lvl_f.render(str(self.rec_dmg), True, pygame.Color("red"))
-            target.blit(wound_lvl_t, self.rect.topleft)
+            target.blit(wound_lvl_t, (self.rect.topleft[0], self.rect.topleft[1] + 6))
         if self.under_attack:
             self.aim_rect.center = self.rect.center
             target.blit(self.aim_img, self.aim_rect)
+
+
+class Canvas(pygame_gui.UIManager):
+    def __init__(self, size, tex_holder, lang='ru'):
+        super().__init__(size, starting_language=lang, translation_directory_paths=['data/translations'])
+        self.tex_holder = tex_holder
+        end_turn_btn_rect = pygame.Rect((self.window_resolution[0] - 100, self.window_resolution[1] - 50), (100, 50))
+        self.end_turn_btn = pygame_gui.elements.UIButton(relative_rect=end_turn_btn_rect, text='lang.finish', manager=self)
+        cur_turn_label_rect = pygame.Rect((self.window_resolution[0] // 2 - 100, 0), (200, 20))
+        self.cur_turn = pygame_gui.elements.UILabel(relative_rect=cur_turn_label_rect,
+                                                    text="lang.current_turn",
+                                                    manager=self)
+        self.cur_turn_num = pygame_gui.elements.UILabel(relative_rect=cur_turn_label_rect.move(0, 20),
+                                                        text="1",
+                                                        manager=self)
+
+
+class AI:
+    def __init__(self, game_manager, turn):
+        self.gm = game_manager
+        self.turn = turn
+        self.brd_width = self.gm.board.width
+        self.brd_height = self.gm.board.height
+        self.brd_center = (self.brd_width // 2, self.brd_height // 2)
+
+    def step(self):
+        steps_stack = []
+        for unit in self.gm.board.units:
+            if unit.turn == self.turn:
+                cell = self.gm.board.get_cell(unit.rect.center)
+                best_move = None
+                best_weight = -self.weight_board()
+                unit.get_walkable_tiles()
+                for move in unit.walkable_tiles:
+                    new_move = StepData(AIStepType.MOVE, cell, move, [])
+                    self.do_step(new_move)
+                    new_weight = -self.weight_board()
+                    # print(new_weight, best_weight)
+                    self.undo_step(new_move)
+                    if new_weight > best_weight:
+                        best_weight = new_weight
+                        best_move = new_move
+                if best_move:
+                    #print(best_move.orig, best_move.dest)
+                    self.do_step(best_move)
+
+    def weight_board(self):
+        weight = 0
+        max_center_dis = self.brd_center[0] + self.brd_center[1]
+        for row in range(self.brd_height):
+            for column in range(self.brd_width):
+                tile = self.gm.board.cells[row][column]
+                unit = tile.unit
+                if unit:
+                    center_dis = (abs(column - self.brd_center[0]) +
+                                  abs(row - self.brd_center[1]))
+                    unit_hp_coeff = val_to_coeff(unit.current_health, 0,
+                                                 unit.health_capacity, 0.2, 1.5)
+                    unit_pos_coeff = val_to_coeff(max_center_dis - center_dis, 0,
+                                                  max_center_dis, 0.8, 1.3)
+                    unit_weight = (TILE_COEFF[tile.tile_type] * unit_hp_coeff *
+                                   unit_pos_coeff * UNIT_SIG[unit.unit_type])
+                    if unit.turn == self.turn:
+                        weight -= unit_weight
+                    else:
+                        weight += unit_weight
+        return weight
+
+    def do_step(self, step):
+        unit = self.gm.board.cells[step.orig[1]][step.orig[0]].unit
+        if step.type == AIStepType.MOVE:
+            self.gm.board.cells[step.orig[1]][step.orig[0]].unit = None
+            self.gm.board.cells[step.dest[1]][step.dest[0]].unit = unit
+            unit.tar_coords = self.gm.board.get_cell_coords(step.dest)
+            unit.moved = True
+        # if step.type == AIStepType.ATTACK:
+        #     unit.attack(unit.board[step.dest[1]][step.dest[0]].unit)
+
+    def undo_step(self, step):
+        if step.type == AIStepType.MOVE:
+            unit = self.gm.board.cells[step.dest[1]][step.dest[0]].unit
+            self.gm.board.cells[step.dest[1]][step.dest[0]].unit = None
+            self.gm.board.cells[step.orig[1]][step.orig[0]].unit = unit
+            unit.tar_coords = self.gm.board.get_cell_coords(step.orig)
+            unit.moved = False
 
 
 class GameManager:
@@ -376,8 +522,11 @@ class GameManager:
         self.tex_holder = ResourceHolder(ResType.TEXTURE)
         self.load_textures(tile_size=64)
         
+        self.canvas = Canvas(self.screen_sizes, self.tex_holder, lang=lang)
         self.board = load_board(map_name, self.tex_holder)
         self.cur_turn = 1
+
+        self.ai = AI(self, 2)
 
     def load_textures(self, tile_size=64):
         self.tex_holder.load(Textures.GROUND, "ground.png", tile_size)
@@ -389,12 +538,15 @@ class GameManager:
         self.tex_holder.load(Textures.WIZARD, "wizard.png", tile_size)
         self.tex_holder.load(Textures.DEMON, "demon.png", tile_size)
         self.tex_holder.load(Textures.AIM, "aim.png", tile_size // 2)
-        self.tex_holder.load(Textures.WOUND, "wound.png", tile_size // 2)        
+        self.tex_holder.load(Textures.WOUND, "wound.png", tile_size // 2)
+        self.tex_holder.load(Textures.BLOOD, "blood.png", tile_size // 4)
+        
 
         self.tex_holder.add(Textures.GROUND_LIGHTED,
                             change_color(self.tex_holder.get(Textures.GROUND), *self.light_color))
 
     def on_cell_click(self, cell):
+        print(self.ai.weight_board())
         tile = self.board.cells[cell[1]][cell[0]]
         if tile.unit:
             self.board.reset_tiles()
@@ -406,7 +558,7 @@ class GameManager:
                 # selected unit is friend
                 self.selected_unit = tile.unit
                 self.selected_unit.get_enemies()
-                self.selected_unit.get_walkable_tiles()
+                self.selected_unit.light_walkable_tiles()
             else:
                 # selected unit is enemy
                 if self.selected_unit:
@@ -449,13 +601,17 @@ class GameManager:
 
     def on_mouse_wheel(self, event):
         mp = pygame.mouse.get_pos()
-        mp_origin = self.board.translate_point(mp[0], mp[1])
+        mp_origin = self.board.translate_point(*mp)
         self.board.scale = max(0.625, min(2., self.board.scale * exp(event.y * 0.1)))
         self.board.offset_x = mp[0] - mp_origin[0] * self.board.scale
         self.board.offset_y = mp[1] - mp_origin[1] * self.board.scale
 
     def on_key_down(self, event):
         if event.key == pygame.K_SPACE:
+            self.end_step()
+
+    def on_ui_button_pressed(self, event):
+        if event.ui_element == self.canvas.end_turn_btn:
             self.end_step()
         
     def process_events(self):
@@ -472,32 +628,38 @@ class GameManager:
                 self.on_mouse_wheel(event)
             if event.type == pygame.KEYDOWN:
                 self.on_key_down(event)
+            if event.type == pygame_gui.UI_BUTTON_PRESSED:
+                self.on_ui_button_pressed(event)
+            self.canvas.process_events(event)
 
     def end_step(self):
         self.board.reset_tiles()
         self.selected_unit = None
         if self.cur_turn == 1:
             self.cur_turn = 2
+            self.ai.step()
         else:
             self.cur_turn = 1
         for unit in self.board.units:
             unit.moved = False
             unit.under_attack = False
             unit.has_attacked = False
+        self.canvas.cur_turn_num.set_text(str(self.cur_turn))
 
     def start_game(self):
-        global DELTATIME
         clock = pygame.time.Clock()
         while self.running:
-            DELTATIME = clock.get_time()
+            time_delta = clock.tick(FPS) / 1000.
             self.process_events()
             self.screen.fill((0, 0, 0))
+            self.board.update(time_delta)
             self.board.render(self.screen)
+            self.canvas.update(time_delta)
+            self.canvas.draw_ui(self.screen)
             pygame.display.flip()
             pygame.display.set_caption(f'TBS. FPS: {int(clock.get_fps())}')
-            clock.tick(FPS)
-            
-            
+
+
 class Board:
     def __init__(self, width, height, tex_holder):
         self.width = width
@@ -508,10 +670,12 @@ class Board:
         self.cells = [[Tile(TileType.FIELD) for _ in range(width)]
                       for _ in range(height)]
         self.units = pygame.sprite.Group()
+        self.particles = pygame.sprite.Group()
         self.outline_width = 2
         self.cell_size = 30
         self.outlined_cell = None
         self.selected_unit = None
+        self.canvas = pygame_gui.UIManager(self.get_total_board_size())
         grd_set = Tileset(tex_holder.get(Textures.GROUND), 4)
         grd_lighted_set = Tileset(tex_holder.get(Textures.GROUND_LIGHTED), 4)
         self.ground_images = {
@@ -529,6 +693,11 @@ class Board:
     def set_view(self, cell_size=64, outline_width=2):
         self.cell_size = cell_size
         self.outline_width = outline_width
+        
+    def update(self, time_delta):
+        self.units.update(time_delta)
+        self.particles.update(time_delta)
+        self.canvas.update(time_delta)
 
     def render(self, target):
         buffer = pygame.Surface(self.get_total_board_size())
@@ -544,22 +713,19 @@ class Board:
                     buffer.blit(image, cell_rect.move(-2.5, -2.5))
                 else:
                     buffer.blit(image, cell_rect)
-
         for unit in self.units:
-            unit.update()
             unit.draw(buffer)
-
+        self.particles.draw(buffer)
         self.draw_outline(self.outlined_cell, pygame.Color("red"), buffer)
+        self.canvas.draw_ui(buffer)
         buffer = pygame.transform.scale(buffer, (buffer.get_width() * self.scale, buffer.get_height() * self.scale))
         target.blit(buffer, (self.offset_x, self.offset_y))
-        rendered.set()
 
     def draw_outline(self, cell, color, surface):
         if cell:
-            x = cell[0] * (self.cell_size + self.outline_width * 2)
-            y = cell[1] * (self.cell_size + self.outline_width * 2)
+            x, y = self.get_cell_coords(cell)
             size = self.outline_width + self.cell_size + 2.5
-            outline_rect = pygame.Rect((x, y), (size, size))
+            outline_rect = pygame.Rect((x, y), (size, size)).move(-2.5, -2.5)
             pygame.draw.rect(surface, color, outline_rect, width=self.outline_width)
 
     def get_cell(self, mouse_pos):
@@ -598,5 +764,6 @@ class Board:
 
 if __name__ == '__main__':
     pygame.init()
-    game_manager = GameManager("map1.csv")
+    game_manager = GameManager("map1.csv", lang="ru")
     game_manager.start_game()
+
