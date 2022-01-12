@@ -80,8 +80,8 @@ TILE_DEFENCE = {
 }
 TILE_COEFF = {
     TileType.FIELD: 1,
-    TileType.CASTLE: 3,
-    TileType.SPIKE: 0.2,
+    TileType.CASTLE: 1.2,
+    TileType.SPIKE: 0.6,
 }
 UNIT_SIG = {
     UnitType.ELF: 10,
@@ -347,7 +347,7 @@ class Unit(AnimatedSprite):
 
     def get_walkable_tiles(self):
         self.walkable_tiles.clear()
-        unit_pos = self.board.get_cell(self.rect.center)
+        unit_pos = self.board.get_cell(self.tar_coords)
         for row in range(self.board.height):
             for column in range(self.board.width):
                 dis_x = abs(unit_pos[0] - column)
@@ -356,36 +356,39 @@ class Unit(AnimatedSprite):
                     if self.board.cells[row][column].tile_type != TileType.ROCK and not self.board.cells[row][column].unit:
                         self.walkable_tiles.append((column, row))
 
-    def get_enemies(self):
+    def get_enemies(self, unit_pos=None):
         self.enemies_in_range.clear()
         if self.has_attacked:
             return
-        unit_pos = self.board.get_cell(self.rect.center)
+        if not unit_pos:
+            unit_pos = self.board.get_cell(self.tar_coords)
         for target in self.board.units:
             if target.turn != self.turn:
-                target_pos = self.board.get_cell(target.rect.center)
+                target_pos = self.board.get_cell(target.tar_coords)
                 dis_x = abs(unit_pos[0] - target_pos[0])
                 dis_y = abs(unit_pos[1] - target_pos[1])
                 if dis_x + dis_y <= self.attack_range:
                     self.enemies_in_range.append(target)
                     target.under_attack = True
 
-    def attack(self, tar):
+    def attack(self, tar, show_effects=True):
         self.has_attacked = True
-        tar_cell = tar.board.get_cell(tar.rect.center)
+        tar_cell = tar.board.get_cell(tar.tar_coords)
         tar_tile = tar.board.cells[tar_cell[1]][tar_cell[0]]
         
         dmg = self.attack_dmg - tar.armor - TILE_DEFENCE[tar_tile.tile_type]
 
         if dmg >= 1:
             tar.current_health -= dmg
-            tar.rec_dmg = dmg
+            if show_effects:
+                tar.rec_dmg = dmg
 
         if tar.current_health <= 0:
             tar.kill()
-            tar.hp_bar.hide()
             tar_tile.unit = None
-            create_particle(tar.rect.center, self.blood_set, -2, 2, -2, 2, 1, 2, 20, self.board.particles)
+            if show_effects:
+                tar.hp_bar.hide()
+                create_particle(tar.tar_coords, self.blood_set, -2, 2, -2, 2, 1, 2, 20, self.board.particles)
 
     def update(self, time_delta):
         self.cur_time -= time_delta
@@ -447,26 +450,84 @@ class AI:
         self.brd_height = self.gm.board.height
         self.brd_center = (self.brd_width // 2, self.brd_height // 2)
 
-    def step(self):
-        steps_stack = []
+    def minimax(self, deph, is_max, alpha, beta):
+        if not deph:
+            return -self.weight_board()
         for unit in self.gm.board.units:
             if unit.turn == self.turn:
-                cell = self.gm.board.get_cell(unit.rect.center)
+                steps_stack = self.get_all_moves(unit)
+                best_weight = 0
+                if is_max:
+                    best_weight = -self.weight_board()
+                    for i in range(len(steps_stack)):
+                        new_move = steps_stack.pop()
+                        self.do_step(new_move)
+                        best_weight = max(best_weight, self.minimax(deph - 1, not is_max, alpha, beta))
+                        self.undo_step(new_move)
+                        alpha = max(alpha, best_weight)
+                        if (beta <= alpha):
+                            return best_weight
+                else:
+                    best_weight = self.weight_board()
+                    for i in range(len(steps_stack)):
+                        new_move = steps_stack.pop()
+                        self.do_step(new_move)
+                        best_weight = min(best_weight, self.minimax(deph - 1, not is_max, alpha, beta))
+                        self.undo_step(new_move)
+                        beta = min(beta, best_weight)
+                        if (beta <= alpha):
+                            return best_weight
+                return best_weight
+
+    def step(self):
+        for unit in self.gm.board.units:
+            if unit.turn == self.turn:
+                steps_stack = self.get_all_moves(unit)
                 best_move = None
                 best_weight = -self.weight_board()
-                unit.get_walkable_tiles()
-                for move in unit.walkable_tiles:
-                    new_move = StepData(AIStepType.MOVE, cell, move, [])
+                for i in range(len(steps_stack)):
+                    new_move = steps_stack.pop()
                     self.do_step(new_move)
-                    new_weight = -self.weight_board()
-                    # print(new_weight, best_weight)
+                    brd_weight = self.minimax(2, True, -10000, 10000)
                     self.undo_step(new_move)
-                    if new_weight > best_weight:
-                        best_weight = new_weight
+                    if brd_weight > best_weight:
                         best_move = new_move
+                        best_weight = brd_weight
                 if best_move:
-                    #print(best_move.orig, best_move.dest)
+                    best_move.etc.is_final = True
+                    if best_move.etc.attack_step:
+                        best_move.etc.attack_step.etc.is_final = True
                     self.do_step(best_move)
+        self.gm.end_step()
+
+    def get_all_moves(self, unit):
+        steps_stack = []
+        cell = self.gm.board.get_cell(unit.tar_coords)
+        unit.get_walkable_tiles()
+        for move in unit.walkable_tiles:
+            move_info = DotDict()
+            move_info.is_final = False
+            move_info.attack_step = None
+            new_move = StepData(AIStepType.MOVE, cell, move, move_info)
+            steps_stack.append(new_move)
+            unit.get_enemies(move)
+            for enemy in unit.enemies_in_range:
+                attack_info = DotDict()
+                attack_info.tar = enemy
+                attack_info.is_final = False
+                attack_move = StepData(AIStepType.ATTACK, move,
+                                       self.gm.board.get_cell(enemy.tar_coords), attack_info)
+                new_move.etc.attack_step = attack_move
+                steps_stack.append(new_move)
+        unit.get_enemies()
+        for enemy in unit.enemies_in_range:
+            attack_info = DotDict()
+            attack_info.tar = enemy
+            attack_info.is_final = False
+            new_move = StepData(AIStepType.ATTACK, cell,
+                                self.gm.board.get_cell(enemy.tar_coords), attack_info)
+            steps_stack.append(new_move)
+        return steps_stack
 
     def weight_board(self):
         weight = 0
@@ -481,7 +542,7 @@ class AI:
                     unit_hp_coeff = val_to_coeff(unit.current_health, 0,
                                                  unit.health_capacity, 0.2, 1.5)
                     unit_pos_coeff = val_to_coeff(max_center_dis - center_dis, 0,
-                                                  max_center_dis, 0.8, 1.3)
+                                                  max_center_dis, 1., 1.1)
                     unit_weight = (TILE_COEFF[tile.tile_type] * unit_hp_coeff *
                                    unit_pos_coeff * UNIT_SIG[unit.unit_type])
                     if unit.turn == self.turn:
@@ -497,8 +558,15 @@ class AI:
             self.gm.board.cells[step.dest[1]][step.dest[0]].unit = unit
             unit.tar_coords = self.gm.board.get_cell_coords(step.dest)
             unit.moved = True
-        # if step.type == AIStepType.ATTACK:
-        #     unit.attack(unit.board[step.dest[1]][step.dest[0]].unit)
+            if step.etc.attack_step:
+                if step.etc.is_final:
+                    step.etc.attack_step.is_final = True
+                self.do_step(step.etc.attack_step)
+        if step.type == AIStepType.ATTACK:
+            orig_hp = step.etc.tar.current_health
+            unit.attack(step.etc.tar, show_effects=step.etc.is_final)
+            dmg = orig_hp - step.etc.tar.current_health
+            step.etc.dmg = dmg
 
     def undo_step(self, step):
         if step.type == AIStepType.MOVE:
@@ -507,7 +575,13 @@ class AI:
             self.gm.board.cells[step.orig[1]][step.orig[0]].unit = unit
             unit.tar_coords = self.gm.board.get_cell_coords(step.orig)
             unit.moved = False
-
+            if step.etc.attack_step:
+                self.undo_step(step.etc.attack_step)
+        if step.type == AIStepType.ATTACK:
+            step.etc.tar.current_health += step.etc.dmg
+            if not step.etc.tar.alive():
+                self.gm.board.units.add(step.etc.tar)
+                self.gm.board.cells[step.dest[1]][step.dest[0]].unit = step.etc.tar
 
 class GameManager:
     def __init__(self, map_name, lang='ru'):
@@ -546,7 +620,6 @@ class GameManager:
                             change_color(self.tex_holder.get(Textures.GROUND), *self.light_color))
 
     def on_cell_click(self, cell):
-        print(self.ai.weight_board())
         tile = self.board.cells[cell[1]][cell[0]]
         if tile.unit:
             self.board.reset_tiles()
@@ -564,12 +637,13 @@ class GameManager:
                 if self.selected_unit:
                     if tile.unit in self.selected_unit.enemies_in_range:
                         self.selected_unit.attack(tile.unit)
+                        self.selected_unit.moved = True
                     self.selected_unit = None
         else:
             if self.board.cells[cell[1]][cell[0]].walkable and self.selected_unit:
                 if not self.selected_unit.moved:
                     # moving unit
-                    cur_cell = self.board.get_cell(self.selected_unit.rect.center)
+                    cur_cell = self.board.get_cell(self.selected_unit.tar_coords)
                     self.board.cells[cur_cell[1]][cur_cell[0]].unit = None
                     self.board.cells[cell[1]][cell[0]].unit = self.selected_unit
                     # self.selected_unit.move(self.board.get_cell_coords(cell))
