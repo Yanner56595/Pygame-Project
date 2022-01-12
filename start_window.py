@@ -38,16 +38,20 @@ def draw_name():
 
 # Настройка кнопок
 manager = pygame_gui.UIManager((width, height))
-main_button = pygame_gui.elements.UIButton(
+new_game_button = pygame_gui.elements.UIButton(
     relative_rect=pygame.Rect(((width - 100) // 2, (height - 50) / 2, 100, 50)),
-    text='Начать игру' * (LANGUAGE == 'Русский') + "Start" * (LANGUAGE == 'English'),
+    text='Начать новую игру' * (LANGUAGE == 'Русский') + "Start new game" * (LANGUAGE == 'English'),
     manager=manager
 )
 choose_language = pygame_gui.elements.ui_drop_down_menu.UIDropDownMenu(
     options_list=['Русский', 'English'], starting_option='Русский',
     relative_rect=pygame.Rect(900, 582, 100, 25), manager=manager
 )
-
+continue_game_button = pygame_gui.elements.UIButton(
+    relative_rect=pygame.Rect(((width - 100) // 2, (height - 50) / 2 * 1.5, 100, 50)),
+    text='Продолжить с последнего сохранения' * (LANGUAGE == 'Русский') + "Continue game" * (LANGUAGE == 'English'),
+    manager=manager
+)
 # Музыка
 sound_main_button = pygame.mixer.Sound(os.path.join(directory, 'Start game.wav'))
 window_sound = pygame.mixer.Sound(os.path.join(directory, 'Main window music.mp3'))
@@ -64,15 +68,22 @@ while running:
         if event.type == pygame.USEREVENT:
             if event.user_type == pygame_gui.UI_DROP_DOWN_MENU_CHANGED:
                 LANGUAGE = event.text
-                main_button.kill()
-                main_button = pygame_gui.elements.UIButton(
+                new_game_button.kill()
+                new_game_button = pygame_gui.elements.UIButton(
                     relative_rect=pygame.Rect(((width - 100) // 2, (height - 50) / 2, 100, 50)),
                     text='Начать игру' * (LANGUAGE == 'Русский') + "Start" * (
                                 LANGUAGE == 'English'),
                     manager=manager
                 )
+                continue_game_button.kill()
+                continue_game_button = pygame_gui.elements.UIButton(
+                    relative_rect=pygame.Rect(((width - 100) // 2, (height - 50) / 2, 100, 50)),
+                    text='Продолжить с последнего сохранения' * (
+                                LANGUAGE == 'Русский') + "Continue game" * (LANGUAGE == 'English'),
+                    manager=manager
+                )
             if event.user_type == pygame_gui.UI_BUTTON_PRESSED:
-                if event.ui_element == main_button:
+                if event.ui_element in (new_game_button, continue_game_button):
                     window_sound.stop()
                     sound_main_button.play()
         manager.process_events(event)
