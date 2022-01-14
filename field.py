@@ -9,7 +9,6 @@ import random
 from csv import reader
 from enum import IntEnum
 from math import exp
-from copy import deepcopy
 
 
 class DotDict(dict):
@@ -30,6 +29,7 @@ class UnitType(IntEnum):
     SCULL = 4
     WIZARD = 5
     DEMON = 6
+    HERO = 7
 
 
 class Textures(IntEnum):
@@ -45,6 +45,8 @@ class Textures(IntEnum):
     AIM = 9
     WOUND = 10
     BLOOD = 11
+    HERO = 12
+    MEDALS = 13
 
 
 class TileType(IntEnum):
@@ -90,12 +92,13 @@ UNIT_SIG = {
     UnitType.GOBLIN: 12,
     UnitType.SCULL: 7,
     UnitType.WIZARD: 15,
-    UnitType.DEMON: 90,
+    UnitType.DEMON: 30,
+    UnitType.HERO: 90,
 }
 
 
 def val_to_coeff(val, max_val, min_val, max_coeff, min_coeff):
-    return val / (max_val - min_val) * (max_coeff - min_coeff) + min_coeff
+    return (val - min_val) / (max_val - min_val) * (max_coeff - min_coeff) + min_coeff
 
 
 def move_towards(cur, tar, delta):
@@ -129,8 +132,12 @@ def change_color(img, dr, dg, db, da):
     new_img.fill((dr, dg, db, da), special_flags=pygame.BLEND_RGBA_MULT)
     return new_img
 
-# def __init__(self, tex_type, tex_holder, columns, frame_time, tbl, x, y,
-#              turn, tile_speed, attack_range, hp, attack_dmg, armor, board, canvas):
+
+def create_hero(board, unit_coords, tex_holder, canvas, turn):
+    unit = Unit(UnitType.HERO, Textures.HERO, tex_holder,
+                5, 0.1, 0, *board.get_cell_coords(unit_coords), turn, 1, 1, 50, 15, 4, board, canvas)
+    return unit
+
 
 def create_elf(board, unit_coords, tex_holder, canvas, turn):
     unit = Unit(UnitType.ELF, Textures.ELF, tex_holder,
@@ -140,7 +147,7 @@ def create_elf(board, unit_coords, tex_holder, canvas, turn):
 
 def create_knight(board, unit_coords, tex_holder, canvas, turn):
     unit = Unit(UnitType.KNIGHT, Textures.KNIGHT, tex_holder,
-                4, 0.1, 0, *board.get_cell_coords(unit_coords), turn, 1, 1, 20, 10, 7, board, canvas)
+                4, 0.1, 0, *board.get_cell_coords(unit_coords), turn, 1, 1, 20, 10, 3, board, canvas)
     return unit
 
 
@@ -152,7 +159,7 @@ def create_mag(board, unit_coords, tex_holder, canvas, turn):
 
 def create_goblin(board, unit_coords, tex_holder, canvas, turn):
     unit = Unit(UnitType.GOBLIN, Textures.GOBLIN, tex_holder,
-                4, 0.1, 0, *board.get_cell_coords(unit_coords), turn, 1, 1, 20, 10, 7, board, canvas)
+                4, 0.1, 0, *board.get_cell_coords(unit_coords), turn, 1, 1, 20, 10, 3, board, canvas)
     return unit
 
 
@@ -170,7 +177,7 @@ def create_wizard(board, unit_coords, tex_holder, canvas, turn):
 
 def create_demon(board, unit_coords, tex_holder, canvas, turn):
     unit = Unit(UnitType.DEMON, Textures.DEMON, tex_holder,
-                4, 0.1, 0, *board.get_cell_coords(unit_coords), turn, 1, 1, 50, 10, 5, board, canvas)
+                4, 0.1, 0, *board.get_cell_coords(unit_coords), turn, 1, 1, 50, 10, 4, board, canvas)
     return unit
 
 
@@ -201,6 +208,8 @@ def load_board(name, tex_holder):
                     unit = create_wizard(board, unit_coords, tex_holder, board.canvas, 2)
                 elif int(unit_data[0]) == UnitType.DEMON:
                     unit = create_demon(board, unit_coords, tex_holder, board.canvas, 2)
+                elif int(unit_data[0]) == UnitType.HERO:
+                    unit = create_hero(board, unit_coords, tex_holder, board.canvas, 1)
                 board.cells[unit_coords[1]][unit_coords[0]].unit = unit
         return board
 
@@ -427,19 +436,105 @@ class Unit(AnimatedSprite):
             target.blit(self.aim_img, self.aim_rect)
 
 
-class Canvas(pygame_gui.UIManager):
-    def __init__(self, size, tex_holder, lang='ru'):
-        super().__init__(size, starting_language=lang, translation_directory_paths=['data/translations'])
-        self.tex_holder = tex_holder
-        end_turn_btn_rect = pygame.Rect((self.window_resolution[0] - 100, self.window_resolution[1] - 50), (100, 50))
-        self.end_turn_btn = pygame_gui.elements.UIButton(relative_rect=end_turn_btn_rect, text='lang.finish', manager=self)
-        cur_turn_label_rect = pygame.Rect((self.window_resolution[0] // 2 - 100, 0), (200, 20))
+class Titles:
+    def __init__(self, manager):
+        panel_rect = pygame.Rect((0, 400), (800, 200))
+        # self.panel = pygame_gui.elements.UIPanel(relative_rect=panel_rect, starting_layer_height=1,
+                                                 # manager=manager)
+        self.text = pygame_gui.elements.UITextBox(relative_rect=panel_rect, 
+                                                  manager=manager, html_text='<p align="right">test<br>str<br>other</p>')
+
+            
+class OverScreen:
+    def __init__(self, manager):
+        panel_rect = pygame.Rect((100, 50), (600, 500))
+        self.panel = pygame_gui.elements.UIPanel(relative_rect=panel_rect, starting_layer_height=0,
+                                                 manager=manager)
+        new_game_rect = pygame.Rect((200, 300), (200, 40))
+        self.new_game = pygame_gui.elements.UIButton(relative_rect=new_game_rect, container=self.panel,
+                                                     manager=manager, text="lang.new_game")
+        self.exit_game = pygame_gui.elements.UIButton(relative_rect=new_game_rect.move(0, 40), container=self.panel,
+                                                     manager=manager, text="lang.exit")
+        self.game_over = pygame_gui.elements.UILabel(relative_rect=new_game_rect.move(0, -200), container=self.panel,
+                                                     manager=manager, text="lang.over")
+    def hide(self):
+        self.panel.hide()
+
+    def show(self):
+        self.panel.show()
+
+class VictoryScreen:
+    def __init__(self, manager, tex_holder):
+        self.medals = Tileset(tex_holder.get(Textures.MEDALS), 3)
+
+        panel_rect = pygame.Rect((100, 50), (600, 500))
+        self.panel = pygame_gui.elements.UIPanel(relative_rect=panel_rect, starting_layer_height=0,
+                                                 manager=manager)
+        new_game_rect = pygame.Rect((200, 300), (200, 40))
+        self.next_level = pygame_gui.elements.UIButton(relative_rect=new_game_rect.move(0, -40), container=self.panel,
+                                                     manager=manager, text="lang.next_lvl")
+        self.new_game = pygame_gui.elements.UIButton(relative_rect=new_game_rect, container=self.panel,
+                                                     manager=manager, text="lang.new_game")
+        self.exit_game = pygame_gui.elements.UIButton(relative_rect=new_game_rect.move(0, 40), container=self.panel,
+                                                      manager=manager, text="lang.exit")
+        self.victory = pygame_gui.elements.UILabel(relative_rect=new_game_rect.move(0, -200), container=self.panel,
+                                                   manager=manager, text="lang.victory")
+        self.losses = pygame_gui.elements.UILabel(relative_rect=new_game_rect.move(-100, -160), container=self.panel,
+                                                  manager=manager, text="lang.losses")
+        self.time = pygame_gui.elements.UILabel(relative_rect=new_game_rect.move(100, -160), container=self.panel,
+                                                  manager=manager, text="lang.time")
+        medal_rect = pygame.Rect((160, 170), (80, 80))
+        self.losses_medal = pygame_gui.elements.UIImage(relative_rect=medal_rect, image_surface=self.medals.tiles[2],
+                                                        container=self.panel, manager=manager)
+        self.time_medal = pygame_gui.elements.UIImage(relative_rect=medal_rect.move(200, 0), image_surface=self.medals.tiles[1],
+                                                      container=self.panel, manager=manager)
+        
+        self.time_rate = 0
+        self.losses_rate = 0
+        
+    def hide(self):
+        self.panel.hide()
+
+    def show(self):
+        self.panel.show()
+
+    def update_rates(self, losses, time):
+        if losses == 0:
+            self.losses_rate = 2
+        elif losses < 3:
+            self.losses_rate = 1
+        else:
+            self.losses_rate = 0
+
+        if time <= 3:
+            self.time_rate = 2
+        elif time <= 6:
+            self.time_rate = 1
+        else:
+            self.time_rate = 0
+
+        self.losses_medal.set_image(self.medals.tiles[self.losses_rate])
+        self.time_medal.set_image(self.medals.tiles[self.time_rate])
+
+class GameUI:
+    def __init__(self, manager):
+        end_turn_btn_rect = pygame.Rect((800 - 100, 600 - 50), (100, 50))
+        self.end_turn_btn = pygame_gui.elements.UIButton(relative_rect=end_turn_btn_rect, text='lang.finish', manager=manager)
+        cur_turn_label_rect = pygame.Rect((800 // 2 - 100, 0), (200, 20))
         self.cur_turn = pygame_gui.elements.UILabel(relative_rect=cur_turn_label_rect,
                                                     text="lang.current_turn",
-                                                    manager=self)
+                                                    manager=manager)
         self.cur_turn_num = pygame_gui.elements.UILabel(relative_rect=cur_turn_label_rect.move(0, 20),
                                                         text="1",
-                                                        manager=self)
+                                                        manager=manager)
+        
+        game_dur_label_rect = pygame.Rect((0, 0), (200, 20))
+        self.game_dur_label = pygame_gui.elements.UILabel(relative_rect=game_dur_label_rect,
+                                                          text="lang.game_duration",
+                                                          manager=manager)
+        self.game_dur = pygame_gui.elements.UILabel(relative_rect=game_dur_label_rect.move(0, 20),
+                                                    text="1",
+                                                    manager=manager)
 
 
 class AI:
@@ -453,8 +548,12 @@ class AI:
     def minimax(self, deph, is_max, alpha, beta):
         if not deph:
             return -self.weight_board()
+        if is_max:
+            turn = self.turn
+        else:
+            turn = 1
         for unit in self.gm.board.units:
-            if unit.turn == self.turn:
+            if unit.turn == turn:
                 steps_stack = self.get_all_moves(unit)
                 best_weight = 0
                 if is_max:
@@ -478,6 +577,7 @@ class AI:
                         if (beta <= alpha):
                             return best_weight
                 return best_weight
+        return self.weight_board()
 
     def step(self):
         for unit in self.gm.board.units:
@@ -488,7 +588,7 @@ class AI:
                 for i in range(len(steps_stack)):
                     new_move = steps_stack.pop()
                     self.do_step(new_move)
-                    brd_weight = self.minimax(2, True, -10000, 10000)
+                    brd_weight = self.minimax(3, True, -10000, 10000)
                     self.undo_step(new_move)
                     if brd_weight > best_weight:
                         best_move = new_move
@@ -540,7 +640,7 @@ class AI:
                     center_dis = (abs(column - self.brd_center[0]) +
                                   abs(row - self.brd_center[1]))
                     unit_hp_coeff = val_to_coeff(unit.current_health, 0,
-                                                 unit.health_capacity, 0.2, 1.5)
+                                                 unit.health_capacity, 0.2, 2)
                     unit_pos_coeff = val_to_coeff(max_center_dis - center_dis, 0,
                                                   max_center_dis, 1., 1.1)
                     unit_weight = (TILE_COEFF[tile.tile_type] * unit_hp_coeff *
@@ -585,20 +685,31 @@ class AI:
 
 class GameManager:
     def __init__(self, map_name, lang='ru'):
+        self.map_name = map_name
         self.screen_sizes = 800, 600
         self.screen = pygame.display.set_mode(self.screen_sizes)
         self.selected_unit = None
         self.moving = False
         self.running = True
+        self.is_game = True
         self.prev_pos = 0, 0
         self.light_color = (128, 128, 255, 255)
 
         self.tex_holder = ResourceHolder(ResType.TEXTURE)
         self.load_textures(tile_size=64)
-        
-        self.canvas = Canvas(self.screen_sizes, self.tex_holder, lang=lang)
+
+        self.ui_manager = pygame_gui.UIManager(self.screen_sizes, starting_language=lang,
+                                               translation_directory_paths=["data/translations/"])
+        self.game_ui = GameUI(self.ui_manager)
+        self.over_screen = OverScreen(self.ui_manager)
+        self.over_screen.hide()
+        self.victory_screen = VictoryScreen(self.ui_manager, self.tex_holder)
+        self.victory_screen.hide()
         self.board = load_board(map_name, self.tex_holder)
         self.cur_turn = 1
+        self.player_units_count = 6
+
+        self.game_duration = 0
 
         self.ai = AI(self, 2)
 
@@ -611,10 +722,11 @@ class GameManager:
         self.tex_holder.load(Textures.SCULL, "scull.png", tile_size)
         self.tex_holder.load(Textures.WIZARD, "wizard.png", tile_size)
         self.tex_holder.load(Textures.DEMON, "demon.png", tile_size)
+        self.tex_holder.load(Textures.HERO, "hero.png", tile_size)
         self.tex_holder.load(Textures.AIM, "aim.png", tile_size // 2)
         self.tex_holder.load(Textures.WOUND, "wound.png", tile_size // 2)
         self.tex_holder.load(Textures.BLOOD, "blood.png", tile_size // 4)
-        
+        self.tex_holder.load(Textures.MEDALS, "medals.png", tile_size)
 
         self.tex_holder.add(Textures.GROUND_LIGHTED,
                             change_color(self.tex_holder.get(Textures.GROUND), *self.light_color))
@@ -685,26 +797,42 @@ class GameManager:
             self.end_step()
 
     def on_ui_button_pressed(self, event):
-        if event.ui_element == self.canvas.end_turn_btn:
+        if event.ui_element == self.game_ui.end_turn_btn and self.is_game:
             self.end_step()
+
+        if event.ui_element in (self.victory_screen.exit_game, self.over_screen.exit_game):
+            self.running = False
+
+        if event.ui_element in (self.victory_screen.new_game, self.over_screen.new_game):
+            self.board = load_board(self.map_name, self.tex_holder)
+            self.cur_turn = 1
+            self.selected_unit = None
+            self.game_duration = 0
+            self.is_game = True
+            self.victory_screen.hide()
+            self.over_screen.hide()
+
+        if event.ui_element == self.victory_screen.next_level:
+            pass
         
     def process_events(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                self.on_mouse_button_down(event)
-            if event.type == pygame.MOUSEBUTTONUP:
-                self.on_mouse_button_up(event)
-            if event.type == pygame.MOUSEMOTION:
-                self.on_mouse_motion(event)
-            if event.type == pygame.MOUSEWHEEL:
-                self.on_mouse_wheel(event)
-            if event.type == pygame.KEYDOWN:
-                self.on_key_down(event)
+            if self.is_game:
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    self.on_mouse_button_down(event)
+                if event.type == pygame.MOUSEBUTTONUP:
+                    self.on_mouse_button_up(event)
+                if event.type == pygame.MOUSEMOTION:
+                    self.on_mouse_motion(event)
+                if event.type == pygame.MOUSEWHEEL:
+                    self.on_mouse_wheel(event)
+                if event.type == pygame.KEYDOWN:
+                    self.on_key_down(event)
             if event.type == pygame_gui.UI_BUTTON_PRESSED:
                 self.on_ui_button_pressed(event)
-            self.canvas.process_events(event)
+            self.ui_manager.process_events(event)
 
     def end_step(self):
         self.board.reset_tiles()
@@ -718,21 +846,53 @@ class GameManager:
             unit.moved = False
             unit.under_attack = False
             unit.has_attacked = False
-        self.canvas.cur_turn_num.set_text(str(self.cur_turn))
+        self.game_ui.cur_turn_num.set_text(str(self.cur_turn))
 
+    def calc_losses(self):
+        alive = 0
+        for unit in self.board.units:
+            if unit.turn == 1:
+                alive += 1
+        return self.player_units_count - alive
+        
     def start_game(self):
         clock = pygame.time.Clock()
         while self.running:
             time_delta = clock.tick(FPS) / 1000.
+            if self.is_game:
+                self.game_duration += time_delta
+            if self.is_over():
+                self.over_screen.show()
+                self.is_game = False
+            elif self.is_victory():
+                self.victory_screen.show()
+                self.is_game = False
+                self.victory_screen.update_rates(self.calc_losses(), int(self.game_duration // 60))
+            self.game_ui.game_dur.set_text(str(int(self.game_duration // 60)))
             self.process_events()
             self.screen.fill((0, 0, 0))
             self.board.update(time_delta)
             self.board.render(self.screen)
-            self.canvas.update(time_delta)
-            self.canvas.draw_ui(self.screen)
+            self.ui_manager.update(time_delta)
+            self.ui_manager.draw_ui(self.screen)
             pygame.display.flip()
             pygame.display.set_caption(f'TBS. FPS: {int(clock.get_fps())}')
 
+    def is_over(self):
+        is_over = True
+        for unit in self.board.units:
+            if unit.unit_type == UnitType.HERO:
+                is_over = False
+                break
+        return is_over
+
+    def is_victory(self):
+        is_victory = True
+        for unit in self.board.units:
+            if unit.unit_type == UnitType.DEMON:
+                is_victory = False
+                break
+        return is_victory
 
 class Board:
     def __init__(self, width, height, tex_holder):

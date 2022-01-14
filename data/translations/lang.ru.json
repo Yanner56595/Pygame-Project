@@ -1,6 +1,14 @@
 {
     "ru": {
 	"current_turn": "Текущий игрок:",
-	"finish": "Закончить ход"
+	"finish": "Закончить ход",
+	"game_duration": "Продолжительность игры:",
+	"new_game": "Новая игра",
+	"exit": "Выйти",
+	"over": "GAME OVER",
+	"next_lvl": "Следующий уровень",
+	"victory": "VICTORY",
+	"losses": "Потери",
+	"time": "Время"
     }
 }

@@ -1,6 +1,14 @@
 {
     "en": {
 	"current_turn": "Current turn:",
-	"finish": "Finish"
+	"finish": "Finish",
+	"game_duration": "Game duration:",
+	"new_game": "New game",
+	"exit": "Exit",
+	"over": "GAME OVER",
+	"next_lvl": "Next level",
+	"victory": "VICTORY",
+	"losses": "Losses",
+	"time": "Time"
     }
 }
