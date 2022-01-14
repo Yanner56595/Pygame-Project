@@ -13,7 +13,6 @@ screen = pygame.display.set_mode(size)
 screen.fill((0, 0, 0))
 clock = pygame.time.Clock()
 FPS = 10
-LANGUAGE = "Русский"
 
 vec2, vec3 = pygame.math.Vector2, pygame.math.Vector3
 NUMBER = 2000
