@@ -2,6 +2,7 @@ from math import pi, cos, sin
 from random import choice, uniform, randrange
 from random import randint
 import pygame
+from moviepy.editor import *
 import os
 import sys
 
@@ -13,7 +14,6 @@ screen.fill((0, 0, 0))
 clock = pygame.time.Clock()
 FPS = 10
 LANGUAGE = "Русский"
-
 
 vec2, vec3 = pygame.math.Vector2, pygame.math.Vector3
 NUMBER = 2000
@@ -87,6 +87,8 @@ def path(transfer, k5):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 transfer = False
+                pygame.quit()
+
         if k5 == 500:
             k5 = 0
             return
@@ -94,7 +96,7 @@ def path(transfer, k5):
         screen.fill((0, 0, 0))
         starfield.run()
         pygame.display.flip()
-        clock.tick(60)
+        clock.tick(100)
     screen.fill((0, 0, 0))
 
 
@@ -104,6 +106,13 @@ sound_start = pygame.mixer.Sound("data/startwindow.mp3")
 
 def start_window(width, height):
     global LANGUAGE
+    play = 0
+    try:
+        movie = VideoFileClip("data/movie.mp4")
+        movie.preview()
+        movie.close()
+    except Exception:
+        play += 1
     sound_start.play()
     background = pygame.transform.scale(load_image("startpicture.png"), (width, height))
     screen.blit(background, (0, 0))
@@ -620,7 +629,12 @@ def main_window(width, height):
                                 jump_time = 0
                     if y < 0:
                         jump_time = 1
-                    if jump_time == 1 and y == 250:
+                    if jump_time == 1 and y >= 250:
+                        jump_time = 0
+                        time = 3
+                        jump = False
+                        draw = True
+                    if y >= 250:
                         jump_time = 0
                         time = 3
                         jump = False
