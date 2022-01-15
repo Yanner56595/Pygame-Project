@@ -19,6 +19,7 @@ class DotDict(dict):
 
 class ResType(IntEnum):
     TEXTURE = 0
+    SOUND = 1
 
 
 class UnitType(IntEnum):
@@ -47,7 +48,15 @@ class Textures(IntEnum):
     BLOOD = 11
     HERO = 12
     MEDALS = 13
+    SATAN = 14
+    SCROOGE = 15
+    VS = 16
+    BACKGROUND = 17
 
+    
+class Sounds(IntEnum):
+    TYPING = 0
+    BREAK = 1
 
 class TileType(IntEnum):
     FIELD = 0
@@ -247,11 +256,18 @@ class ResourceHolder:
         self.res = {}
         self.res_type = res_type
 
-    def load(self, iden, filename, tile_size):
+    def load(self, iden, filename, tile_size=0):
         if self.res_type == ResType.TEXTURE:
             img = load_image(filename)
-            self.res[iden] = pygame.transform.scale(img, (img.get_width() * (tile_size / img.get_height()),
-                                                          tile_size))
+            if tile_size:
+                self.res[iden] = pygame.transform.scale(img, (img.get_width() * (tile_size / img.get_height()),
+                                                              tile_size))
+            else:
+                self.res[iden] = img
+
+        if self.res_type == ResType.SOUND:
+            self.res[iden] = pygame.mixer.Sound(os.path.join('data', filename))
+
     def get(self, iden):
         return self.res[iden]
 
@@ -437,14 +453,111 @@ class Unit(AnimatedSprite):
 
 
 class Titles:
-    def __init__(self, manager):
-        panel_rect = pygame.Rect((0, 400), (800, 200))
-        # self.panel = pygame_gui.elements.UIPanel(relative_rect=panel_rect, starting_layer_height=1,
-                                                 # manager=manager)
-        self.text = pygame_gui.elements.UITextBox(relative_rect=panel_rect, 
-                                                  manager=manager, html_text='<p align="right">test<br>str<br>other</p>')
+    def __init__(self, text, delay, snd_holder):
+        self.typing_sound = snd_holder.get(Sounds.TYPING)
+        self.text = text
+        self.delay = delay
+        self.cur_time = 0
+        self.pointer = 0
+        self.lines = [""]
+        self.font = pygame.font.Font(None, 30)
+        self.stop = False
+        self.shown = False
 
-            
+    def update(self, time_delta):
+        if not self.stop:
+            self.cur_time += time_delta
+            if self.cur_time >= self.delay:
+                if self.pointer < len(self.text):
+                    if self.text[self.pointer] == '\n':
+                        self.lines.append("")
+                    elif self.text[self.pointer] == '@':
+                        self.stop = True
+                        self.pointer += 1
+                    else:
+                        self.typing_sound.play()
+                        self.lines[-1] += self.text[self.pointer]
+                        self.cur_time = 0
+                    self.pointer += 1
+
+    def render(self, screen):
+        if not self.shown:
+            height = screen.get_height() // 4 + 20 * len(self.lines)
+            surf = pygame.Surface((screen.get_width(), height))
+            for i, line in enumerate(self.lines):
+                txt_surf = self.font.render(line, True, pygame.Color("white"))
+                txt_rect = txt_surf.get_rect()
+                txt_rect.center = (surf.get_width() // 2, 50 + i * 30)
+                surf.blit(txt_surf, txt_rect)
+            screen.blit(surf, (0, screen.get_height() - height))
+
+    def next_page(self):
+        if self.stop:
+            if self.pointer >= len(self.text) - 1:
+                self.shown = True
+            else:
+                self.stop = False
+                self.lines = [""]
+
+
+class Intro:
+    def __init__(self, tex_holder, snd_holder, lang="ru"):
+        with open(f"data/intro_titles_{lang}.txt", encoding='utf8') as file:
+            titles_text = file.read()[:-1]
+        self.titles = Titles(titles_text, 0.1, snd_holder)
+        self.break_sound = snd_holder.get(Sounds.BREAK)
+        self.show_intro = False
+        self.satan_img = tex_holder.get(Textures.SATAN)
+        self.satan_img = pygame.transform.scale(self.satan_img, (self.satan_img.get_width() * 0.7,
+                                                                 self.satan_img.get_height() * 0.7))
+        self.satan_rect = self.satan_img.get_rect()
+        self.background_img = tex_holder.get(Textures.BACKGROUND)
+        self.background_rect = self.background_img.get_rect()
+        self.scrooge_img = tex_holder.get(Textures.SCROOGE)
+        self.scrooge_img = pygame.transform.scale(self.scrooge_img, (self.scrooge_img.get_width() * 0.7,
+                                                                     self.scrooge_img.get_height() * 0.7))
+        self.scrooge_rect = self.scrooge_img.get_rect()
+        self.vs_img = tex_holder.get(Textures.VS)
+        self.vs_img = pygame.transform.scale(self.vs_img, (self.vs_img.get_width() * 0.7,
+                                                           self.vs_img.get_height() * 0.7))
+        self.vs_rect = self.vs_img.get_rect()
+
+        self.background_rect.center = (400, -self.background_rect.height // 2)
+        self.scrooge_rect.bottomleft = (-self.scrooge_rect.width, 600)
+        self.satan_rect.bottomright = (800 + self.scrooge_rect.width, 600)
+        self.vs_rect.center = (400, -self.vs_rect.height // 2)
+
+        self.shown = False
+        self.hide = False
+
+    def update(self, time_delta):
+        if not self.shown:
+            self.titles.update(time_delta)
+            if self.titles.shown == True:
+                self.show_intro = True
+                if self.show_intro:
+                    if self.background_rect.center[1] < 300:
+                        self.background_rect.y += 1000 * time_delta
+                    elif self.scrooge_rect.left < -20 or self.satan_rect.right > 820:
+                        if self.scrooge_rect.left < -20:
+                            self.scrooge_rect.x += 1000 * time_delta
+                        if self.satan_rect.right > 820:
+                            self.satan_rect.x -= 1000 * time_delta
+                    elif self.vs_rect.center[1] < 300:
+                        self.vs_rect.y += 1000 * time_delta
+                    else:
+                        self.shown = True
+                        self.break_sound.play()
+                        
+    def render(self, screen):
+        if not self.hide:
+            self.titles.render(screen)
+            screen.blit(self.background_img, self.background_rect)
+            screen.blit(self.scrooge_img, self.scrooge_rect)
+            screen.blit(self.satan_img, self.satan_rect)
+            screen.blit(self.vs_img, self.vs_rect)
+
+
 class OverScreen:
     def __init__(self, manager):
         panel_rect = pygame.Rect((100, 50), (600, 500))
@@ -691,12 +804,15 @@ class GameManager:
         self.selected_unit = None
         self.moving = False
         self.running = True
-        self.is_game = True
+        self.is_game = False
+        self.is_intro = True
         self.prev_pos = 0, 0
         self.light_color = (128, 128, 255, 255)
 
         self.tex_holder = ResourceHolder(ResType.TEXTURE)
+        self.snd_holder = ResourceHolder(ResType.SOUND)
         self.load_textures(tile_size=64)
+        self.load_sounds()
 
         self.ui_manager = pygame_gui.UIManager(self.screen_sizes, starting_language=lang,
                                                translation_directory_paths=["data/translations/"])
@@ -713,6 +829,8 @@ class GameManager:
 
         self.ai = AI(self, 2)
 
+        self.intro = Intro(self.tex_holder, self.snd_holder, lang)
+
     def load_textures(self, tile_size=64):
         self.tex_holder.load(Textures.GROUND, "ground.png", tile_size)
         self.tex_holder.load(Textures.ELF, "elf.png", tile_size)
@@ -727,77 +845,96 @@ class GameManager:
         self.tex_holder.load(Textures.WOUND, "wound.png", tile_size // 2)
         self.tex_holder.load(Textures.BLOOD, "blood.png", tile_size // 4)
         self.tex_holder.load(Textures.MEDALS, "medals.png", tile_size)
+        self.tex_holder.load(Textures.SATAN, "satan.png"),
+        self.tex_holder.load(Textures.SCROOGE, "scrooge.png"),
+        self.tex_holder.load(Textures.VS, "vs.png"),
+        self.tex_holder.load(Textures.BACKGROUND, "background.png")
 
         self.tex_holder.add(Textures.GROUND_LIGHTED,
                             change_color(self.tex_holder.get(Textures.GROUND), *self.light_color))
 
+    def load_sounds(self):
+        self.snd_holder.load(Sounds.TYPING, "typing.mp3")
+        self.snd_holder.load(Sounds.BREAK, "break.flac")
+
     def on_cell_click(self, cell):
-        tile = self.board.cells[cell[1]][cell[0]]
-        if tile.unit:
-            self.board.reset_tiles()
-            self.board.reset_units()
-            if self.selected_unit is tile.unit:
-                # selected unit was previously selected
-                self.selected_unit = None
-            elif tile.unit.turn == self.cur_turn:
-                # selected unit is friend
-                self.selected_unit = tile.unit
-                self.selected_unit.get_enemies()
-                self.selected_unit.light_walkable_tiles()
+        if self.is_game:
+            tile = self.board.cells[cell[1]][cell[0]]
+            if tile.unit:
+                self.board.reset_tiles()
+                self.board.reset_units()
+                if self.selected_unit is tile.unit:
+                    # selected unit was previously selected
+                    self.selected_unit = None
+                elif tile.unit.turn == self.cur_turn:
+                    # selected unit is friend
+                    self.selected_unit = tile.unit
+                    self.selected_unit.get_enemies()
+                    self.selected_unit.light_walkable_tiles()
+                else:
+                    # selected unit is enemy
+                    if self.selected_unit:
+                        if tile.unit in self.selected_unit.enemies_in_range:
+                            self.selected_unit.attack(tile.unit)
+                            self.selected_unit.moved = True
+                        self.selected_unit = None
             else:
-                # selected unit is enemy
-                if self.selected_unit:
-                    if tile.unit in self.selected_unit.enemies_in_range:
-                        self.selected_unit.attack(tile.unit)
+                if self.board.cells[cell[1]][cell[0]].walkable and self.selected_unit:
+                    if not self.selected_unit.moved:
+                        # moving unit
+                        cur_cell = self.board.get_cell(self.selected_unit.tar_coords)
+                        self.board.cells[cur_cell[1]][cur_cell[0]].unit = None
+                        self.board.cells[cell[1]][cell[0]].unit = self.selected_unit
+                        # self.selected_unit.move(self.board.get_cell_coords(cell))
+                        self.selected_unit.tar_coords = self.board.get_cell_coords(cell)
                         self.selected_unit.moved = True
-                    self.selected_unit = None
-        else:
-            if self.board.cells[cell[1]][cell[0]].walkable and self.selected_unit:
-                if not self.selected_unit.moved:
-                    # moving unit
-                    cur_cell = self.board.get_cell(self.selected_unit.tar_coords)
-                    self.board.cells[cur_cell[1]][cur_cell[0]].unit = None
-                    self.board.cells[cell[1]][cell[0]].unit = self.selected_unit
-                    # self.selected_unit.move(self.board.get_cell_coords(cell))
-                    self.selected_unit.tar_coords = self.board.get_cell_coords(cell)
-                    self.selected_unit.moved = True
-                    self.selected_unit = None
-                    self.board.reset_units()
-                    self.board.reset_tiles()
+                        self.selected_unit = None
+                        self.board.reset_units()
+                        self.board.reset_tiles()
 
     def on_mouse_button_down(self, event):
-        if event.button == 3:
-            self.moving = True
-            self.prev_pos = event.pos
-        elif event.button == 1:    
-            cell = self.board.get_cell(self.board.translate_point(*event.pos))
-            if cell:
-                self.on_cell_click(cell)
+        if self.is_game:
+            if event.button == 3:
+                self.moving = True
+                self.prev_pos = event.pos
+            elif event.button == 1:    
+                cell = self.board.get_cell(self.board.translate_point(*event.pos))
+                if cell:
+                    self.on_cell_click(cell)
 
     def on_mouse_button_up(self, event):
-        if event.button == 3:
-            self.moving = False
+        if self.is_game:
+            if event.button == 3:
+                self.moving = False
 
     def on_mouse_motion(self, event):
-        self.board.outlined_cell = self.board.get_cell(self.board.translate_point(*event.pos))
-        if self.moving:
-            self.board.offset_x -= self.prev_pos[0] - event.pos[0]
-            self.board.offset_y -= self.prev_pos[1] - event.pos[1]
-            self.prev_pos = event.pos
+        if self.is_game:
+            self.board.outlined_cell = self.board.get_cell(self.board.translate_point(*event.pos))
+            if self.moving:
+                self.board.offset_x -= self.prev_pos[0] - event.pos[0]
+                self.board.offset_y -= self.prev_pos[1] - event.pos[1]
+                self.prev_pos = event.pos
 
     def on_mouse_wheel(self, event):
-        mp = pygame.mouse.get_pos()
-        mp_origin = self.board.translate_point(*mp)
-        self.board.scale = max(0.625, min(2., self.board.scale * exp(event.y * 0.1)))
-        self.board.offset_x = mp[0] - mp_origin[0] * self.board.scale
-        self.board.offset_y = mp[1] - mp_origin[1] * self.board.scale
+        if self.is_game:
+            mp = pygame.mouse.get_pos()
+            mp_origin = self.board.translate_point(*mp)
+            self.board.scale = max(0.625, min(2., self.board.scale * exp(event.y * 0.1)))
+            self.board.offset_x = mp[0] - mp_origin[0] * self.board.scale
+            self.board.offset_y = mp[1] - mp_origin[1] * self.board.scale
 
     def on_key_down(self, event):
         if event.key == pygame.K_SPACE:
-            self.end_step()
+            if self.is_game:
+                self.end_step()
+            if self.is_intro:
+                self.intro.titles.next_page()
+                if self.intro.shown:
+                    self.intro.hide = True
+                    self.is_game = True
 
     def on_ui_button_pressed(self, event):
-        if event.ui_element == self.game_ui.end_turn_btn and self.is_game:
+        if event.ui_element == self.game_ui.end_turn_btn and self.is_game and not self.is_intro:
             self.end_step()
 
         if event.ui_element in (self.victory_screen.exit_game, self.over_screen.exit_game):
@@ -819,17 +956,16 @@ class GameManager:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
-            if self.is_game:
-                if event.type == pygame.MOUSEBUTTONDOWN:
-                    self.on_mouse_button_down(event)
-                if event.type == pygame.MOUSEBUTTONUP:
-                    self.on_mouse_button_up(event)
-                if event.type == pygame.MOUSEMOTION:
-                    self.on_mouse_motion(event)
-                if event.type == pygame.MOUSEWHEEL:
-                    self.on_mouse_wheel(event)
-                if event.type == pygame.KEYDOWN:
-                    self.on_key_down(event)
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                self.on_mouse_button_down(event)
+            if event.type == pygame.MOUSEBUTTONUP:
+                self.on_mouse_button_up(event)
+            if event.type == pygame.MOUSEMOTION:
+                self.on_mouse_motion(event)
+            if event.type == pygame.MOUSEWHEEL:
+                self.on_mouse_wheel(event)
+            if event.type == pygame.KEYDOWN:
+                self.on_key_down(event)
             if event.type == pygame_gui.UI_BUTTON_PRESSED:
                 self.on_ui_button_pressed(event)
             self.ui_manager.process_events(event)
@@ -875,6 +1011,8 @@ class GameManager:
             self.board.render(self.screen)
             self.ui_manager.update(time_delta)
             self.ui_manager.draw_ui(self.screen)
+            self.intro.update(time_delta)
+            self.intro.render(self.screen)
             pygame.display.flip()
             pygame.display.set_caption(f'TBS. FPS: {int(clock.get_fps())}')
 
