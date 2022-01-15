@@ -934,7 +934,7 @@ class GameManager:
                     self.is_game = True
 
     def on_ui_button_pressed(self, event):
-        if event.ui_element == self.game_ui.end_turn_btn and self.is_game and not self.is_intro:
+        if event.ui_element == self.game_ui.end_turn_btn and self.is_game:
             self.end_step()
 
         if event.ui_element in (self.victory_screen.exit_game, self.over_screen.exit_game):
