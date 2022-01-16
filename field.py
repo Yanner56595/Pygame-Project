@@ -6,6 +6,7 @@ import pygame
 import pygame_gui
 import os
 import random
+import sqlite3
 from csv import reader
 from enum import IntEnum
 from math import exp
@@ -512,18 +513,18 @@ class Intro:
         self.break_sound = snd_holder.get(Sounds.BREAK)
         self.show_intro = False
         self.satan_img = tex_holder.get(Textures.SATAN)
-        self.satan_img = pygame.transform.scale(self.satan_img, (self.satan_img.get_width() * 0.7,
-                                                                 self.satan_img.get_height() * 0.7))
+        self.satan_img = pygame.transform.scale(self.satan_img, (int(self.satan_img.get_width() * 0.7),
+                                                                 int(self.satan_img.get_height() * 0.7)))
         self.satan_rect = self.satan_img.get_rect()
         self.background_img = tex_holder.get(Textures.BACKGROUND)
         self.background_rect = self.background_img.get_rect()
         self.scrooge_img = tex_holder.get(Textures.SCROOGE)
-        self.scrooge_img = pygame.transform.scale(self.scrooge_img, (self.scrooge_img.get_width() * 0.7,
-                                                                     self.scrooge_img.get_height() * 0.7))
+        self.scrooge_img = pygame.transform.scale(self.scrooge_img, (int(self.scrooge_img.get_width() * 0.7),
+                                                                     int(self.scrooge_img.get_height() * 0.7)))
         self.scrooge_rect = self.scrooge_img.get_rect()
         self.vs_img = tex_holder.get(Textures.VS)
-        self.vs_img = pygame.transform.scale(self.vs_img, (self.vs_img.get_width() * 0.7,
-                                                           self.vs_img.get_height() * 0.7))
+        self.vs_img = pygame.transform.scale(self.vs_img, (int(self.vs_img.get_width() * 0.7),
+                                                           int(self.vs_img.get_height() * 0.7)))
         self.vs_rect = self.vs_img.get_rect()
 
         self.background_rect.center = (400, -self.background_rect.height // 2)
@@ -583,8 +584,10 @@ class OverScreen:
 
 
 class VictoryScreen:
-    def __init__(self, manager, tex_holder):
+    def __init__(self, manager, tex_holder, user_id):
         self.medals = Tileset(tex_holder.get(Textures.MEDALS), 3)
+        self.connection = sqlite3.connect("data/Users.db")
+        self.user_id = 0
 
         panel_rect = pygame.Rect((100, 50), (600, 500))
         self.panel = pygame_gui.elements.UIPanel(relative_rect=panel_rect, starting_layer_height=0,
@@ -598,16 +601,16 @@ class VictoryScreen:
                                                       manager=manager, text="lang.exit")
         self.victory = pygame_gui.elements.UILabel(relative_rect=new_game_rect.move(0, -200), container=self.panel,
                                                    manager=manager, text="lang.victory")
-        self.losses = pygame_gui.elements.UILabel(relative_rect=new_game_rect.move(-100, -160), container=self.panel,
-                                                  manager=manager, text="lang.losses")
-        self.time = pygame_gui.elements.UILabel(relative_rect=new_game_rect.move(100, -160), container=self.panel,
-                                                manager=manager, text="lang.time")
+        # self.losses = pygame_gui.elements.UILabel(relative_rect=new_game_rect.move(-100, -160), container=self.panel,
+        #                                          manager=manager, text="lang.losses")
+        # self.time = pygame_gui.elements.UILabel(relative_rect=new_game_rect.move(100, -160), container=self.panel,
+        #                                        manager=manager, text="lang.time")
         medal_rect = pygame.Rect((160, 170), (80, 80))
-        self.losses_medal = pygame_gui.elements.UIImage(relative_rect=medal_rect, image_surface=self.medals.tiles[2],
-                                                        container=self.panel, manager=manager)
-        self.time_medal = pygame_gui.elements.UIImage(relative_rect=medal_rect.move(200, 0),
-                                                      image_surface=self.medals.tiles[1],
-                                                      container=self.panel, manager=manager)
+        # self.losses_medal = pygame_gui.elements.UIImage(relative_rect=medal_rect, image_surface=img,
+        #                                                container=self.panel, manager=manager)
+        # self.time_medal = pygame_gui.elements.UIImage(relative_rect=medal_rect.move(200, 0),
+        #                                              image_surface=img,
+        #                                              container=self.panel, manager=manager)
 
         self.time_rate = 0
         self.losses_rate = 0
@@ -633,8 +636,19 @@ class VictoryScreen:
         else:
             self.time_rate = 0
 
-        self.losses_medal.set_image(self.medals.tiles[self.losses_rate])
-        self.time_medal.set_image(self.medals.tiles[self.time_rate])
+        cur = self.connection.cursor()
+
+        cur.execute(f"INSERT INTO Users_and_Achievements (UserId, AchId) VALUES "
+                    f"({self.user_id}, 1), "
+                    f"({self.user_id}, 2), "
+                    f"({self.user_id}, 3), "
+                    f"({self.user_id}, 4), "
+                    f"({self.user_id}, 5), "
+                    f"({self.user_id}, 6)",)
+        self.connection.commit()
+
+        # self.losses_medal.set_image(self.medals.tiles[self.losses_rate])
+        # self.time_medal.set_image(self.medals.tiles[self.time_rate])
 
 
 class GameUI:
@@ -806,7 +820,7 @@ class AI:
 
 
 class GameManager:
-    def __init__(self, map_name, lang='ru'):
+    def __init__(self, map_name, user_id, lang='ru'):
         self.map_name = map_name
         self.screen_sizes = 800, 600
         self.screen = pygame.display.set_mode(self.screen_sizes)
@@ -817,7 +831,6 @@ class GameManager:
         self.is_intro = True
         self.prev_pos = 0, 0
         self.light_color = (128, 128, 255, 255)
-
         self.tex_holder = ResourceHolder(ResType.TEXTURE)
         self.snd_holder = ResourceHolder(ResType.SOUND)
         self.load_textures(tile_size=64)
@@ -828,7 +841,7 @@ class GameManager:
         self.game_ui = GameUI(self.ui_manager)
         self.over_screen = OverScreen(self.ui_manager)
         self.over_screen.hide()
-        self.victory_screen = VictoryScreen(self.ui_manager, self.tex_holder)
+        self.victory_screen = VictoryScreen(self.ui_manager, self.tex_holder, user_id)
         self.victory_screen.hide()
         self.board = load_board(map_name, self.tex_holder)
         self.cur_turn = 1
@@ -1147,5 +1160,5 @@ class Board:
 
 if __name__ == '__main__':
     pygame.init()
-    game_manager = GameManager("map1.csv", lang="ru")
+    game_manager = GameManager("map1.csv", 0, lang="ru")
     game_manager.start_game()
