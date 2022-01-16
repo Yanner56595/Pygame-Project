@@ -12,7 +12,7 @@ class Titles:
         self.font = directory
         self.play = 0
 
-    def update(self, screen, clock, pressed_enter, typing=None, end_typing=None):
+    def update(self, screen, clock, pressed_enter, color, typing=None, end_typing=None):
         if not self.wait:
             if not self.play and typing:
                 typing.play(-1)
@@ -62,7 +62,7 @@ class Titles:
             dp = 35
             place_y = 555
         for line in self.shown:
-            text = font.render(''.join(line), True, (0, 0, 0))
+            text = font.render(''.join(line), True, color)
             text_x = self.width // 2 - text.get_width() // 2
             text_y = place_y
             screen.blit(text, (text_x, text_y))
