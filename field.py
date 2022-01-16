@@ -1020,10 +1020,10 @@ class GameManager:
             time_delta = clock.tick(FPS) / 1000.
             if self.is_game:
                 self.game_duration += time_delta
-            if self.is_over():
+            if self.is_over() and self.is_game:
                 self.over_screen.show()
                 self.is_game = False
-            elif self.is_victory():
+            elif self.is_victory() and self.is_game:
                 self.victory_screen.show()
                 self.is_game = False
                 self.victory_screen.update_rates(self.calc_losses(), int(self.game_duration // 60))
