@@ -53,10 +53,11 @@ class Textures(IntEnum):
     VS = 16
     BACKGROUND = 17
 
-    
+
 class Sounds(IntEnum):
     TYPING = 0
     BREAK = 1
+
 
 class TileType(IntEnum):
     FIELD = 0
@@ -125,7 +126,7 @@ def load_image(name, colorkey=None):
     if not os.path.isfile(fullname):
         print(f"File '{fullname}' not found")
         sys.exit()
-    image = pygame.image.load(fullname)    
+    image = pygame.image.load(fullname)
     if colorkey:
         image = image.convert()
         if colorkey == -1:
@@ -241,6 +242,7 @@ class Particle(pygame.sprite.Sprite):
         self.time = random.uniform(time_min, time_max)
         self.rect.x, self.rect.y = pos
         self.coords = list(pos)
+
     def update(self, time_delta):
         self.coords[0] += self.velocity[0]
         self.coords[1] += self.velocity[1]
@@ -260,8 +262,8 @@ class ResourceHolder:
         if self.res_type == ResType.TEXTURE:
             img = load_image(filename)
             if tile_size:
-                self.res[iden] = pygame.transform.scale(img, (img.get_width() * (tile_size / img.get_height()),
-                                                              tile_size))
+                self.res[iden] = pygame.transform.scale(img, (img.get_width() *
+                                                              int(tile_size / img.get_height()), tile_size))
             else:
                 self.res[iden] = img
 
@@ -273,12 +275,13 @@ class ResourceHolder:
 
     def add(self, iden, obj):
         self.res[iden] = obj
-    
+
 
 class Tileset:
     def __init__(self, sheet, columns):
         self.tiles = []
         self.cut_sheet(sheet, columns)
+
     def cut_sheet(self, sheet, columns):
         rect = pygame.Rect((0, 0),
                            (sheet.get_width() // columns,
@@ -300,7 +303,7 @@ class AnimatedSprite(pygame.sprite.Sprite, Tileset):
         self.cur_time_before_loop = time_before_loop
         self.image = self.tiles[self.cur_frame]
         self.rect = self.image.get_rect().move(x, y)
-        
+
     def update(self, time_delta):
         self.cur_time -= time_delta
         self.cur_time_before_loop -= time_delta
@@ -310,7 +313,7 @@ class AnimatedSprite(pygame.sprite.Sprite, Tileset):
                 self.cur_time = self.frame_time
                 self.image = self.tiles[self.cur_frame]
                 if self.cur_frame == 0:
-                    self.cur_frame_before_loop = self.time_before_loop
+                    self.cur_time_before_loop = self.time_before_loop
 
 
 class Tile:
@@ -322,7 +325,7 @@ class Tile:
 
 class Unit(AnimatedSprite):
     def __init__(self, unit_type, tex_type, tex_holder, columns, frame_time, tbl, x, y,
-                 turn, tile_speed, attack_range, hp, attack_dmg, armor,  board, canvas):
+                 turn, tile_speed, attack_range, hp, attack_dmg, armor, board, canvas):
         AnimatedSprite.__init__(self, tex_holder.get(tex_type), columns, frame_time, tbl, x, y, board.units)
         self.unit_type = unit_type
 
@@ -378,7 +381,8 @@ class Unit(AnimatedSprite):
                 dis_x = abs(unit_pos[0] - column)
                 dis_y = abs(unit_pos[1] - row)
                 if dis_x + dis_y <= self.tile_speed:
-                    if self.board.cells[row][column].tile_type != TileType.ROCK and not self.board.cells[row][column].unit:
+                    if self.board.cells[row][column].tile_type != TileType.ROCK and not \
+                            self.board.cells[row][column].unit:
                         self.walkable_tiles.append((column, row))
 
     def get_enemies(self, unit_pos=None):
@@ -400,7 +404,7 @@ class Unit(AnimatedSprite):
         self.has_attacked = True
         tar_cell = tar.board.get_cell(tar.tar_coords)
         tar_tile = tar.board.cells[tar_cell[1]][tar_cell[0]]
-        
+
         dmg = self.attack_dmg - tar.armor - TILE_DEFENCE[tar_tile.tile_type]
 
         if dmg >= 1:
@@ -533,7 +537,7 @@ class Intro:
     def update(self, time_delta):
         if not self.shown:
             self.titles.update(time_delta)
-            if self.titles.shown == True:
+            if self.titles.shown:
                 self.show_intro = True
                 if self.show_intro:
                     if self.background_rect.center[1] < 300:
@@ -548,7 +552,7 @@ class Intro:
                     else:
                         self.shown = True
                         self.break_sound.play()
-                        
+
     def render(self, screen):
         if not self.hide:
             self.titles.render(screen)
@@ -567,14 +571,16 @@ class OverScreen:
         self.new_game = pygame_gui.elements.UIButton(relative_rect=new_game_rect, container=self.panel,
                                                      manager=manager, text="lang.new_game")
         self.exit_game = pygame_gui.elements.UIButton(relative_rect=new_game_rect.move(0, 40), container=self.panel,
-                                                     manager=manager, text="lang.exit")
+                                                      manager=manager, text="lang.exit")
         self.game_over = pygame_gui.elements.UILabel(relative_rect=new_game_rect.move(0, -200), container=self.panel,
                                                      manager=manager, text="lang.over")
+
     def hide(self):
         self.panel.hide()
 
     def show(self):
         self.panel.show()
+
 
 class VictoryScreen:
     def __init__(self, manager, tex_holder):
@@ -585,7 +591,7 @@ class VictoryScreen:
                                                  manager=manager)
         new_game_rect = pygame.Rect((200, 300), (200, 40))
         self.next_level = pygame_gui.elements.UIButton(relative_rect=new_game_rect.move(0, -40), container=self.panel,
-                                                     manager=manager, text="lang.next_lvl")
+                                                       manager=manager, text="lang.next_lvl")
         self.new_game = pygame_gui.elements.UIButton(relative_rect=new_game_rect, container=self.panel,
                                                      manager=manager, text="lang.new_game")
         self.exit_game = pygame_gui.elements.UIButton(relative_rect=new_game_rect.move(0, 40), container=self.panel,
@@ -595,16 +601,17 @@ class VictoryScreen:
         self.losses = pygame_gui.elements.UILabel(relative_rect=new_game_rect.move(-100, -160), container=self.panel,
                                                   manager=manager, text="lang.losses")
         self.time = pygame_gui.elements.UILabel(relative_rect=new_game_rect.move(100, -160), container=self.panel,
-                                                  manager=manager, text="lang.time")
+                                                manager=manager, text="lang.time")
         medal_rect = pygame.Rect((160, 170), (80, 80))
         self.losses_medal = pygame_gui.elements.UIImage(relative_rect=medal_rect, image_surface=self.medals.tiles[2],
                                                         container=self.panel, manager=manager)
-        self.time_medal = pygame_gui.elements.UIImage(relative_rect=medal_rect.move(200, 0), image_surface=self.medals.tiles[1],
+        self.time_medal = pygame_gui.elements.UIImage(relative_rect=medal_rect.move(200, 0),
+                                                      image_surface=self.medals.tiles[1],
                                                       container=self.panel, manager=manager)
-        
+
         self.time_rate = 0
         self.losses_rate = 0
-        
+
     def hide(self):
         self.panel.hide()
 
@@ -629,10 +636,12 @@ class VictoryScreen:
         self.losses_medal.set_image(self.medals.tiles[self.losses_rate])
         self.time_medal.set_image(self.medals.tiles[self.time_rate])
 
+
 class GameUI:
     def __init__(self, manager):
         end_turn_btn_rect = pygame.Rect((800 - 100, 600 - 50), (100, 50))
-        self.end_turn_btn = pygame_gui.elements.UIButton(relative_rect=end_turn_btn_rect, text='lang.finish', manager=manager)
+        self.end_turn_btn = pygame_gui.elements.UIButton(relative_rect=end_turn_btn_rect, text='lang.finish',
+                                                         manager=manager)
         cur_turn_label_rect = pygame.Rect((800 // 2 - 100, 0), (200, 20))
         self.cur_turn = pygame_gui.elements.UILabel(relative_rect=cur_turn_label_rect,
                                                     text="lang.current_turn",
@@ -640,7 +649,7 @@ class GameUI:
         self.cur_turn_num = pygame_gui.elements.UILabel(relative_rect=cur_turn_label_rect.move(0, 20),
                                                         text="1",
                                                         manager=manager)
-        
+
         game_dur_label_rect = pygame.Rect((0, 0), (200, 20))
         self.game_dur_label = pygame_gui.elements.UILabel(relative_rect=game_dur_label_rect,
                                                           text="lang.game_duration",
@@ -668,7 +677,6 @@ class AI:
         for unit in self.gm.board.units:
             if unit.turn == turn:
                 steps_stack = self.get_all_moves(unit)
-                best_weight = 0
                 if is_max:
                     best_weight = -self.weight_board()
                     for i in range(len(steps_stack)):
@@ -677,7 +685,7 @@ class AI:
                         best_weight = max(best_weight, self.minimax(deph - 1, not is_max, alpha, beta))
                         self.undo_step(new_move)
                         alpha = max(alpha, best_weight)
-                        if (beta <= alpha):
+                        if beta <= alpha:
                             return best_weight
                 else:
                     best_weight = self.weight_board()
@@ -687,7 +695,7 @@ class AI:
                         best_weight = min(best_weight, self.minimax(deph - 1, not is_max, alpha, beta))
                         self.undo_step(new_move)
                         beta = min(beta, best_weight)
-                        if (beta <= alpha):
+                        if beta <= alpha:
                             return best_weight
                 return best_weight
         return self.weight_board()
@@ -796,6 +804,7 @@ class AI:
                 self.gm.board.units.add(step.etc.tar)
                 self.gm.board.cells[step.dest[1]][step.dest[0]].unit = step.etc.tar
 
+
 class GameManager:
     def __init__(self, map_name, lang='ru'):
         self.map_name = map_name
@@ -897,7 +906,7 @@ class GameManager:
             if event.button == 3:
                 self.moving = True
                 self.prev_pos = event.pos
-            elif event.button == 1:    
+            elif event.button == 1:
                 cell = self.board.get_cell(self.board.translate_point(*event.pos))
                 if cell:
                     self.on_cell_click(cell)
@@ -951,7 +960,7 @@ class GameManager:
 
         if event.ui_element == self.victory_screen.next_level:
             pass
-        
+
     def process_events(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -990,7 +999,7 @@ class GameManager:
             if unit.turn == 1:
                 alive += 1
         return self.player_units_count - alive
-        
+
     def start_game(self):
         clock = pygame.time.Clock()
         while self.running:
@@ -1032,6 +1041,7 @@ class GameManager:
                 break
         return is_victory
 
+
 class Board:
     def __init__(self, width, height, tex_holder):
         self.width = width
@@ -1058,14 +1068,14 @@ class Board:
             TileType.CASTLE: {ImageType.ORIG: grd_set.tiles[2],
                               ImageType.LIGHTED: grd_lighted_set.tiles[2]},
             TileType.SPIKE: {ImageType.ORIG: grd_set.tiles[3],
-                              ImageType.LIGHTED: grd_lighted_set.tiles[3]},
+                             ImageType.LIGHTED: grd_lighted_set.tiles[3]},
         }
         self.set_view()
 
     def set_view(self, cell_size=64, outline_width=2):
         self.cell_size = cell_size
         self.outline_width = outline_width
-        
+
     def update(self, time_delta):
         self.units.update(time_delta)
         self.particles.update(time_delta)
@@ -1106,7 +1116,8 @@ class Board:
         column = mouse_x // (self.cell_size + self.outline_width * 2)
         row = mouse_y // (self.cell_size + self.outline_width * 2)
         if (0 <= column < self.width and 0 <= row < self.height and
-                0 <= mouse_x - column * (self.cell_size + 2 * self.outline_width) - self.outline_width <= self.cell_size and
+                0 <= mouse_x - column * (
+                        self.cell_size + 2 * self.outline_width) - self.outline_width <= self.cell_size and
                 0 <= mouse_y - row * (self.cell_size + 2 * self.outline_width) - self.outline_width <= self.cell_size):
             return int(column), int(row)
         return None
@@ -1124,7 +1135,7 @@ class Board:
     def reset_units(self):
         for unit in self.units:
             unit.under_attack = False
-                
+
     def get_cell_coords(self, cell):
         x = self.outline_width + cell[0] * (self.cell_size + self.outline_width * 2)
         y = self.outline_width + cell[1] * (self.cell_size + self.outline_width * 2)
@@ -1138,4 +1149,3 @@ if __name__ == '__main__':
     pygame.init()
     game_manager = GameManager("map1.csv", lang="ru")
     game_manager.start_game()
-
