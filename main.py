@@ -346,10 +346,12 @@ def finish_window(width, height, distance_m, name, sunduk):
                     return main_window(width, height)
                 if 450 <= event.pos[0] <= 750 and 550 <= event.pos[1] <= 730:
                     if sunduk >= 3:
-                        return
+                        return 3
                 if 850 <= event.pos[0] <= 1150 and 550 <= event.pos[1] <= 730:
                     if sunduk >= 3:
-                        return
+                        return 2
+                    return 0
+
         if k1 >= 50:
             for all in all_sprites:
                 all.kill()
@@ -804,9 +806,10 @@ def main_window(width, height):
             pygame.display.flip()
         except Exception:
             exception += 1
-    finish_window(width, height, distance_m, name, sunduk)
+    return finish_window(width, height, distance_m, name, sunduk)
 
 
 path(transfer, k5)
 start_window(width, height)
-main_window(width, height)
+my_result = main_window(width, height)
+print(my_result)
