@@ -622,29 +622,30 @@ class VictoryScreen:
         self.panel.show()
 
     def update_rates(self, losses, time):
+        cur = self.connection.cursor()
         if losses == 0:
             self.losses_rate = 2
+            los_ach_id = 1
         elif losses < 3:
             self.losses_rate = 1
+            los_ach_id = 2
         else:
             self.losses_rate = 0
+            los_ach_id = 3
 
         if time <= 3:
             self.time_rate = 2
+            time_ach_id = 4
         elif time <= 6:
             self.time_rate = 1
+            time_ach_id = 5
         else:
             self.time_rate = 0
-
-        cur = self.connection.cursor()
+            time_ach_id = 6
 
         cur.execute(f"INSERT INTO Users_and_Achievements (UserId, AchId) VALUES "
-                    f"({self.user_id}, 1), "
-                    f"({self.user_id}, 2), "
-                    f"({self.user_id}, 3), "
-                    f"({self.user_id}, 4), "
-                    f"({self.user_id}, 5), "
-                    f"({self.user_id}, 6)",)
+                    f"({self.user_id}, {los_ach_id}), "
+                    f"({self.user_id}, {time_ach_id})")
         self.connection.commit()
 
         # self.losses_medal.set_image(self.medals.tiles[self.losses_rate])
